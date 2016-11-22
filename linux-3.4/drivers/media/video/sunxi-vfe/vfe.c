@@ -4302,7 +4302,7 @@ void vfe_fix_mux()
 	unsigned int addr = 0x01c20894;
 	unsigned int size = 0x4;
 	unsigned int value = 0;
-	unsigned int fix = 0xff33ffff;
+	unsigned int fix = 0x0033ffff;
 	unsigned int fix1 = 0x0;//0x07000000;
 	//return;
 	
