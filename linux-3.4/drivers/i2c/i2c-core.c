@@ -509,6 +509,7 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 	struct i2c_client	*client;
 	int			status;
 
+	printk("i2c_new_device 0 \n");
 	client = kzalloc(sizeof *client, GFP_KERNEL);
 	if (!client)
 		return NULL;
@@ -531,6 +532,7 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 	if (status) {
 		dev_err(&adap->dev, "Invalid %d-bit I2C address 0x%02hx\n",
 			client->flags & I2C_CLIENT_TEN ? 10 : 7, client->addr);
+		printk("i2c_new_device 1 \n");
 		goto out_err_silent;
 	}
 
@@ -539,6 +541,7 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 	if (status)
 		goto out_err;
 
+	printk("i2c_new_device 2 \n");
 	client->dev.parent = &client->adapter->dev;
 	client->dev.bus = &i2c_bus_type;
 	client->dev.type = &i2c_client_type;
@@ -552,6 +555,7 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 	if (status)
 		goto out_err;
 
+	printk("i2c_new_device 3 \n");
 	dev_dbg(&adap->dev, "client [%s] registered with bus id %s\n",
 		client->name, dev_name(&client->dev));
 
@@ -560,7 +564,9 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 out_err:
 	dev_err(&adap->dev, "Failed to register i2c client %s at 0x%02x "
 		"(%d)\n", client->name, client->addr, status);
+	printk("i2c_new_device 4 \n");
 out_err_silent:
+	printk("i2c_new_device 5 \n");
 	kfree(client);
 	return NULL;
 }
@@ -1605,6 +1611,7 @@ i2c_new_probed_device(struct i2c_adapter *adap,
 
 	if (addr_list[i] == I2C_CLIENT_END) {
 		dev_dbg(&adap->dev, "Probing failed, no device found\n");
+		printk("i2c_new_probed_device: Probing failed, no device found\n");
 		return NULL;
 	}
 

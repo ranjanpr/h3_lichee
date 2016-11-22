@@ -42,6 +42,9 @@
 #include <mach/sunxi-chip.h>
 #include <mach/sunxi-smc.h>
 
+//ankt
+#include <media/mt9v032.h>
+
 #ifdef CONFIG_SMP
 extern struct smp_operations sunxi_smp_ops;
 #endif
@@ -117,6 +120,29 @@ static struct i2c_board_info i2c_ina219_devs[] __initdata = {
 };
 #endif
 
+//ankt
+#define APTINA_SENSOR_I2C_ENABLE
+#if defined(APTINA_SENSOR_I2C_ENABLE)
+#define APTINA_SENSOR_I2C_BUS     (2)
+
+static const s64 mt9v034_link_freqs[] = {
+	13000000,
+	26600000,
+	27000000,
+	0,
+};
+static struct mt9v032_platform_data my_mt9v034_platform_data = {
+	.clk_pol	= 0,
+	.link_freqs	= mt9v034_link_freqs,
+	.link_def_freq	= 26600000,
+};
+
+static struct i2c_board_info __initdata aptina_sensor_i2c_bdi = {
+               I2C_BOARD_INFO("mt9v032", 0x48),
+	       .platform_data = &my_mt9v034_platform_data,
+};
+#endif
+
 /*------------------------------------------------------------------------------
  * Matrix device
  */
@@ -144,7 +170,7 @@ static struct i2c_board_info __initdata ds1307_i2c_bdi = {
 };
 #endif
 
-#if defined(CONFIG_SENSORS_PCF8591_MODULE)
+#if 0 //defined(CONFIG_SENSORS_PCF8591_MODULE)
 #define PCF8591_I2C_BUS (0)
 static struct i2c_board_info __initdata pcf8591_i2c_bdi = {
         I2C_BOARD_INFO("pcf8591", 0x48),
@@ -496,6 +522,15 @@ static void __init sunxi_dev_init(void)
 	printk("ina219 device registered\n");
 #endif
 
+//ankt
+#if 1
+#if defined(APTINA_SENSOR_I2C_ENABLE)
+        printk("###############plat: add aptina sensor device#############\n");
+        i2c_register_board_info(APTINA_SENSOR_I2C_BUS, &aptina_sensor_i2c_bdi, 1);
+#endif
+#endif
+
+#if 0	
 #if defined(CONFIG_INPUT_ADXL34X_I2C_MODULE)
 	printk("plat: add adxl34x device\n");
 	i2c_register_board_info(ADXL34X_I2C_BUS, &adxl34x_i2c_bdi, 1);
@@ -514,6 +549,7 @@ static void __init sunxi_dev_init(void)
 #if defined(CONFIG_SENSORS_PCF8591_MODULE)
 	printk("plat: add pcf8591 device\n");
 	i2c_register_board_info(PCF8591_I2C_BUS, &pcf8591_i2c_bdi, 1);
+#endif
 #endif	
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE

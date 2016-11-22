@@ -151,10 +151,20 @@ twi_used = 1
 twi_scl = port:PA18<3><default><default><default>
 twi_sda = port:PA19<3><default><default><default>
 
+;ankt
 [twi2]
-twi_used = 0
+twi_used = 1
 twi_scl = port:PE12<3><default><default><default>
 twi_sda = port:PE13<3><default><default><default>
+
+;[twi_devices]
+;twi_dev_num = 2
+
+;[twi_board0]
+;modalias = "mt9v032"
+;clk_pol	= 0
+;link_freqs = 
+;link_def_freq = 26600000
 
 [uart0]
 uart_used = 1
@@ -368,16 +378,19 @@ vip_csi_d4               = port:PE08<2><default><default><default>
 vip_csi_d5               = port:PE09<2><default><default><default>
 vip_csi_d6               = port:PE10<2><default><default><default>
 vip_csi_d7               = port:PE11<2><default><default><default>
-vip_csi_sck              = port:PE12<2><default><default><default>
-vip_csi_sda              = port:PE13<2><default><default><default>
-
-vip_dev0_mname           = "ov5640"
+;vip_csi_sck              = port:PE12<2><default><default><default>
+;vip_csi_sda              = port:PE13<2><default><default><default>
+;ankt
+;vip_dev0_mname           = "ov5640"
+;vip_dev0_mname           = 
+vip_dev0_mname           = "mt9v032"
 vip_dev0_pos             = "rear"
 vip_dev0_lane            = 2
-vip_dev0_twi_id          = 2
-vip_dev0_twi_addr        = 0x78
+vip_dev0_twi_id          = 1
+;vip_dev0_twi_addr        = 0x90
+;vip_dev0_twi_addr        = 0x78
 vip_dev0_isp_used        = 0
-vip_dev0_fmt             = 0
+vip_dev0_fmt             = 1
 vip_dev0_stby_mode       = 0
 vip_dev0_vflip           = 0
 vip_dev0_hflip           = 0

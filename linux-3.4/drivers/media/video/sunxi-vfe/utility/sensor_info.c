@@ -22,7 +22,7 @@ struct sensor_item sensor_list_t[] =
 {
 	//         name                  i2c_addr               sensor type               sensor size          sensor max pclk
 	{	"ov2640"		,	0x60,		SENSOR_YUV	,	 PIXEL_NUM_2M		, CORE_CLK_RATE_FOR_2M},
-	{	"ov5640"		,	0x78,		SENSOR_YUV	,	 PIXEL_NUM_5M		, CORE_CLK_RATE_FOR_5M},
+	//{	"ov5640"		,	0x78,		SENSOR_YUV	,	 PIXEL_NUM_5M		, CORE_CLK_RATE_FOR_5M},
 	{	"ov5647"		,	0x6c,		SENSOR_RAW	,	 PIXEL_NUM_5M		, CORE_CLK_RATE_FOR_5M},
 	{	"ov5647_mipi"	,	0x6c,		SENSOR_RAW	,	 PIXEL_NUM_5M		, CORE_CLK_RATE_FOR_5M},
 	{	"ov5650"		,	0x50,		SENSOR_RAW	,	 PIXEL_NUM_5M		, CORE_CLK_RATE_FOR_5M},
@@ -59,6 +59,9 @@ struct sensor_item sensor_list_t[] =
 	{	"nt99252"		,	0x6c,		SENSOR_YUV	,	 PIXEL_NUM_2M		, CORE_CLK_RATE_FOR_2M},
 	{	"ov7736"		,	0x42,		SENSOR_YUV	,	 PIXEL_NUM_0_3M		, CORE_CLK_RATE_FOR_2M},
 	{	"gc2155"		,	0x78,		SENSOR_YUV	,	 PIXEL_NUM_2M		, CORE_CLK_RATE_FOR_2M},
+//ankt
+	//{       "mt9v032"                ,       0x48,           SENSOR_RAW      ,        PIXEL_NUM_3M           , CORE_CLK_RATE_FOR_3M},
+	{       "mt9v032"                ,       0x48,           SENSOR_YUV      ,        PIXEL_NUM_3M           , CORE_CLK_RATE_FOR_3M},
 
 };
 int get_sensor_info(char *sensor_name, struct sensor_item *sensor_info)
@@ -69,6 +72,8 @@ int get_sensor_info(char *sensor_name, struct sensor_item *sensor_info)
 		if(strcmp(sensor_name,sensor_list_t[i].sensor_name) == 0)
 		{
 			*sensor_info = sensor_list_t[i];
+			//*sensor_info = sensor_list_t[SENSOR_ARRAY_SIZE(sensor_list_t)-1];
+			printk("get_sensor_info %s\n",sensor_list_t[i].sensor_name);
 			return 0;
 		}
 	}

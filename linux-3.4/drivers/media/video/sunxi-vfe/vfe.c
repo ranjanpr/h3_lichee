@@ -45,6 +45,7 @@
 #include "utility/vfe_io.h"
 #include <linux/ion_sunxi.h>
 
+#include <media/mt9v032.h>
 #define IS_FLAG(x,y) (((x)&(y)) == y)
 #define CLIP_MAX(x,max) ((x) > max ? max : x )
 
@@ -116,6 +117,7 @@ module_param(vfe_i2c_dbg,uint, S_IRUGO|S_IWUSR);
 module_param(isp_log,uint, S_IRUGO|S_IWUSR);
 
 module_param(vips,uint, S_IRUGO|S_IWUSR);
+void vfe_fix_mux();
 static ssize_t vfe_dbg_en_show(struct device *dev,
 		    struct device_attribute *attr, char *buf)
 {
@@ -400,6 +402,10 @@ static struct vfe_fmt formats[] = {
 };
 
 static enum v4l2_mbus_pixelcode try_yuv422_bus[] = {
+	//V4L2_MBUS_FMT_SGRBG10_1X10,
+	//V4L2_MBUS_FMT_SGRBG8_8X1,
+	V4L2_MBUS_FMT_SGRBG8_1X8,
+	//V4L2_MBUS_FMT_YUYV10_2X10,
 	V4L2_MBUS_FMT_UYVY10_20X1,
 	V4L2_MBUS_FMT_UYVY8_16X1,
 
@@ -949,7 +955,7 @@ static inline void vfe_set_addr(struct vfe_dev *dev,struct vfe_buffer *buffer)
 	
 	if(vb_buf == NULL || vb_buf->priv == NULL)
 	{
-		vfe_err("videobuf_buffer->priv is NULL!\n");
+		vfe_err("videobuf_buffer->priv is NULL! vb%d vgp%d\n", vb_buf, vb_buf->priv);
 		return;
 	}
 
@@ -1399,7 +1405,7 @@ static void vfe_isp_stat_parse(struct isp_gen_settings * isp_gen)
 /*
  *  the interrupt routine
  */
-
+int irq_count = 0;
 static irqreturn_t vfe_isr(int irq, void *priv)
 {
 	int i;
@@ -1415,7 +1421,8 @@ static irqreturn_t vfe_isr(int irq, void *priv)
 #endif		
 
 	FUNCTION_LOG;
-	vfe_dbg(0,"vfe interrupt!!!\n");
+	//vfe_dbg(0,"vfe interrupt!!!\n");
+	//printk("vfe interrupt : %d!!!\n",irq_count++);
 	if(vfe_is_generating(dev) == 0)
 	{
 		bsp_csi_int_clear_status(dev->vip_sel, dev->cur_ch,CSI_INT_ALL);
@@ -1503,17 +1510,17 @@ isp_exp_handle:
 			bsp_csi_int_disable(dev->vip_sel, dev->cur_ch,CSI_INT_FRAME_DONE);
 		if (dev->first_flag == 0) {
 			dev->first_flag++;
-			vfe_dbg(0, "capture video mode!\n");
+			//vfe_dbg(0, "capture video mode!\n");
 			goto set_isp_stat_addr;
 		}
 		if (dev->first_flag == 1) {
 			dev->first_flag++;
-			vfe_dbg(0, "capture video first frame done!\n");
+			//vfe_dbg(0, "capture video first frame done!\n");
 		}
 
 		//video buffer handle:
 		if ((&dma_q->active) == dma_q->active.next->next->next) {
-			vfe_dbg(0, "Only two buffer left for csi\n");
+			//vfe_dbg(0, "Only two buffer left for csi\n");
 			dev->first_flag=0;
 			goto unlock;
 		}
@@ -1521,7 +1528,7 @@ isp_exp_handle:
 
 		/* Nobody is waiting on this buffer*/
 		if (!waitqueue_active(&buf->vb.done)) {
-			vfe_dbg(0, " Nobody is waiting on this video buffer,buf = 0x%p\n",buf);
+			//vfe_dbg(0, " Nobody is waiting on this video buffer,buf = 0x%p\n",buf);
 		}
 		list_del(&buf->vb.queue);
 		do_gettimeofday(&buf->vb.ts);
@@ -2061,6 +2068,7 @@ static enum v4l2_mbus_pixelcode *try_fmt_internal(struct vfe_dev *dev,struct v4l
   f->fmt.pix.width = ccm_fmt.width;
   f->fmt.pix.height = ccm_fmt.height;
 
+  vfe_dbg(0,"my pixel code = %x at %s\n",V4L2_MBUS_FMT_SGRBG10_1X10,__func__);
   vfe_dbg(0,"bus pixel code = %x at %s\n",*bus_pix_code,__func__);
   vfe_dbg(0,"pix->width = %d at %s\n",f->fmt.pix.width,__func__);
   vfe_dbg(0,"pix->height = %d at %s\n",f->fmt.pix.height,__func__);
@@ -2611,7 +2619,7 @@ static int vidioc_streamon(struct file *file, void *priv, enum v4l2_buf_type i)
   int ret = 0;
   mutex_lock(&dev->stream_lock);
 //  spin_lock(&dev->slock);//debug
-  vfe_dbg(0,"video stream on\n");
+  printk("video stream on\n");
   if (i != V4L2_BUF_TYPE_VIDEO_CAPTURE) {
     ret = -EINVAL;
     goto streamon_unlock;
@@ -2703,6 +2711,8 @@ static int vidioc_streamon(struct file *file, void *priv, enum v4l2_buf_type i)
 	if(dev->mbus_type == V4L2_MBUS_CSI2)
 		bsp_mipi_csi_protocol_enable(dev->mipi_sel);
 #endif
+	v4l2_subdev_call(dev->sd,video,s_stream,1);
+  	printk("video stream generating\n");
 	vfe_start_generating(dev);
 
 streamon_unlock:
@@ -2777,6 +2787,8 @@ static int vidioc_streamoff(struct file *file, void *priv, enum v4l2_buf_type i)
   if(dev->is_isp_used)
     bsp_isp_disable();
   bsp_csi_disable(dev->vip_sel);
+	printk("video stream generating stream stopped\n");
+	v4l2_subdev_call(dev->sd,video,s_stream,0);
 streamoff_unlock:
   //spin_unlock(&dev->slock);//debug
   mutex_unlock(&dev->stream_lock);
@@ -4010,6 +4022,10 @@ static ssize_t vfe_read(struct file *file, char __user *data, size_t count, loff
 					file->f_flags & O_NONBLOCK);
 	} else {
 		vfe_err("csi is not generating!\n");
+		//vidioc_streamon(file, NULL, V4L2_BUF_TYPE_VIDEO_CAPTURE);
+		//return videobuf_read_stream(&dev->vb_vidq, data, count, ppos, 0,
+		//			file->f_flags & O_NONBLOCK);
+
 		return -EINVAL;
 	}
 }
@@ -4050,6 +4066,7 @@ static int vfe_open(struct file *file)
 	int ret;//,input_num;
 
 	vfe_print("vfe_open\n");
+	printk("vfe_open\n");
 	if (vfe_is_opened(dev)) {
 		vfe_err("device open busy\n");
 		ret = -EBUSY;
@@ -4092,6 +4109,7 @@ static int vfe_open(struct file *file)
 		vfe_opened_num ++;
 		internal_s_input(dev, 0);
 	}
+	printk("vfe opened ok\n");
 	return ret;
 }
 
@@ -4168,10 +4186,10 @@ static int vfe_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct vfe_dev *dev = video_drvdata(file);
 	int ret;
-	vfe_dbg(0,"mmap called, vma=0x%08lx\n", (unsigned long)vma);
+	//vfe_dbg(0,"mmap called, vma=0x%08lx\n", (unsigned long)vma);
 	ret = videobuf_mmap_mapper(&dev->vb_vidq, vma);
-	vfe_dbg(0,"vma start=0x%08lx, size=%ld, ret=%d\n", (unsigned long)vma->vm_start,
-			(unsigned long)vma->vm_end - (unsigned long)vma->vm_start, ret);
+	//vfe_dbg(0,"vma start=0x%08lx, size=%ld, ret=%d\n", (unsigned long)vma->vm_start,
+		//	(unsigned long)vma->vm_end - (unsigned long)vma->vm_start, ret);
 	return ret;
 }
 
@@ -4234,15 +4252,100 @@ static struct video_device vfe_template[] =
         },
 };
 
+struct vfe_dev *my_dev;
+struct pinctrl *twi_pctrl;
+//extern struct pinctrl *my_pctrl_0;
+
+void vfe_muxto_i2c()
+{
+
+	struct vfe_dev *dev = my_dev;
+
+	if(dev == NULL)
+		return;
+
+	devm_pinctrl_put(dev->pctrl);
+	dev_set_name(&dev->pdev->dev,"twi2");
+	twi_pctrl = devm_pinctrl_get_select(&dev->pdev->dev, "default");
+	if (IS_ERR_OR_NULL(twi_pctrl)) {
+		vfe_err("my vip%d request pinctrl handle for device [%s] failed!\n", dev->id, dev_name(&dev->pdev->dev));
+		//	return -EINVAL;
+	}
+	dev_set_name(&dev->pdev->dev,"sunxi_vfe.%d",dev->id);
+	msleep(100);
+
+	return ;
+}
+
+void vfe_muxto_csi()
+{
+	struct vfe_dev *dev = my_dev;
+	if(dev == NULL)
+		return;
+
+	devm_pinctrl_put(twi_pctrl);
+	dev_set_name(&dev->pdev->dev,"csi%d",dev->id);
+	dev->pctrl = devm_pinctrl_get_select(&dev->pdev->dev, "default");
+	if (IS_ERR_OR_NULL(dev->pctrl)) {
+		vfe_err("my vip%d request pinctrl handle for device [%s] failed!\n", dev->id, dev_name(&dev->pdev->dev));
+		//	return -EINVAL;
+	}
+	dev_set_name(&dev->pdev->dev,"sunxi_vfe.%d",dev->id);
+	msleep(100);
+
+	return;
+}
+
+void vfe_fix_mux()
+{
+	void __iomem *pe_cfg1_reg;
+	unsigned int addr = 0x01c20894;
+	unsigned int size = 0x4;
+	unsigned int value = 0;
+	unsigned int fix = 0xff33ffff;
+	unsigned int fix1 = 0x0;//0x07000000;
+	//return;
+	
+	if(!request_mem_region(addr, size, "fix_mux_vfe")) {
+		printk("vfe_fix_mux error request_mem_region\n");
+		return;
+	}
+	pe_cfg1_reg = ioremap(addr, size);
+	if(!pe_cfg1_reg) {
+		release_mem_region(addr, size);
+		printk("vfe_fix_mux error request_mem_region\n");
+		return;
+	}
+
+	value = ioread32(pe_cfg1_reg);
+	value &= fix;
+	value |= fix1;
+	iowrite32(value, pe_cfg1_reg);
+
+	iounmap(pe_cfg1_reg);
+	release_mem_region(addr,size);
+	msleep(100);
+	printk("vfe_fix_mux error - good work!!\n");
+
+	return;
+}
+
+
 static int vfe_request_pin(struct vfe_dev *dev, int enable)
 {
 	int ret = 0;
+	//struct pinctrl *twi_pctrl;
 #ifdef VFE_GPIO
 	//to cheat the pinctrl
+	printk("vfe vfe_request_pin\n");
+	my_dev = dev;
+	//my_pctrl_0 = dev->pctrl;
+	//dev_set_name(&dev->pdev->dev,"twi2");
 	dev_set_name(&dev->pdev->dev,"csi%d",dev->id);
 	if(!IS_ERR_OR_NULL(dev->pctrl))
 	{
 		devm_pinctrl_put(dev->pctrl);
+		printk("vfe vfe_request_pin error\n");
 	}
 	if(1 == enable){
 		dev->pctrl = devm_pinctrl_get_select(&dev->pdev->dev, "default");
@@ -4250,6 +4353,17 @@ static int vfe_request_pin(struct vfe_dev *dev, int enable)
 			vfe_err("vip%d request pinctrl handle for device [%s] failed!\n", dev->id, dev_name(&dev->pdev->dev));
 			return -EINVAL;
 		}
+		//vfe_muxto_i2c();
+		//vfe_muxto_csi();
+		//devm_pinctrl_put(dev->pctrl);
+		//dev_set_name(&dev->pdev->dev,"twi2");
+		//dev_set_name(&dev->pdev->dev,"csi%d",dev->id);
+		//twi_pctrl = devm_pinctrl_get_select(&dev->pdev->dev, "default");
+		//if (IS_ERR_OR_NULL(twi_pctrl)) {
+		//	vfe_err("vip%d request pinctrl handle for device [%s] failed!\n", dev->id, dev_name(&dev->pdev->dev));
+		//	return -EINVAL;
+		//}
+		printk("vfe vfe_request_pin enabled\n");
 	}
 	else
 	{
@@ -4260,13 +4374,20 @@ static int vfe_request_pin(struct vfe_dev *dev, int enable)
 		}
 	}
 	//to uncheat the pinctrl
+	printk("vfe vfe_request_pin done\n");
 	dev_set_name(&dev->pdev->dev,"sunxi_vfe.%d",dev->id);
 	usleep_range(5000, 6000);
+	//writel((volatile void*)0x11332222,(volatile void __iomem*)(0x01c20894));
+	//usleep_range(5000, 6000);
+	//vfe_fix_mux();
+	//vfe_muxto_i2c();
+	printk("vfe vfe_request_pin done done\n");
 #endif
 
 #ifdef FPGA_PIN
 	//pin for FPGA
 	vfe_print("directly write pin config @ FPGA\n");
+	printk("vfe directly write pin config @ FPGA\n");
 	writel((volatile void*)0x33333333,(volatile void __iomem*)(GPIO_REGS_VBASE+0x90));
 	writel((volatile void*)0x33333333,(volatile void __iomem*)(GPIO_REGS_VBASE+0x94));
 	writel((volatile void*)0x03333333,(volatile void __iomem*)(GPIO_REGS_VBASE+0x98));
@@ -4514,7 +4635,9 @@ static int vfe_resource_request(struct platform_device *pdev ,struct vfe_dev *de
 	/* pin resource */
 	/* request gpio */
 	vfe_request_pin(dev, 1);
+	//return 0;
 	vfe_request_gpio(dev);
+	vfe_fix_mux();
 	return 0;
 }
 
@@ -4763,6 +4886,7 @@ static int vfe_sensor_check(struct vfe_dev *dev)
 	int ret = 0;
 	struct v4l2_subdev *sd = dev->sd;
 	vfe_print("Check sensor!\n");
+	printk("vfe_sensor_check 0\n");
 #ifdef CONFIG_ARCH_SUN8IW8P1	
 	return 0;
 #endif
@@ -4770,33 +4894,39 @@ static int vfe_sensor_check(struct vfe_dev *dev)
 #ifdef USE_SPECIFIC_CCI
 	csi_cci_init_helper(dev->vip_sel);
 #endif
+	printk("vfe_sensor_check 1\n");
 	ret = v4l2_subdev_call(sd,core, init, 0);
 	if(dev->power->stby_mode == NORM_STBY){
 		if(ret < 0)
 		{
 			vfe_set_sensor_power_off(dev);
 			ret = -1;
+			printk("vfe_sensor_check 2\n");
 		}
 		else
 		{
 			v4l2_subdev_call(sd,core, s_power, CSI_SUBDEV_STBY_ON);
 			ret = 0;
+			printk("vfe_sensor_check 3\n");
 		}
 	}
 	else// if(dev->power->stby_mode == POWER_OFF)
 	{
 		ret = (ret< 0)?-1:0;
 		vfe_set_sensor_power_off(dev);
+		printk("vfe_sensor_check 4\n");
 	}
 	if(vfe_i2c_dbg == 1)
 	{
 		vfe_print("NOTE: Sensor i2c dbg, it's always power on and register success!..................\n");
 		ret = 0;
 		vfe_set_sensor_power_on(dev);
+		printk("vfe_sensor_check 5\n");
 	}
 #ifdef USE_SPECIFIC_CCI
 	csi_cci_exit_helper(dev->vip_sel);
 #endif
+	printk("vfe_sensor_check 6\n");
 	return ret;
 }
 
@@ -4805,6 +4935,7 @@ static int vfe_sensor_subdev_register_check(struct vfe_dev *dev,struct v4l2_devi
 							struct ccm_config  *ccm_cfg, struct i2c_board_info *sensor_i2c_board)
 {
 	int ret;
+	printk("vfe_sensor_subdev_register_check USE_SPECIFIC_CCI 0\n");
 	ccm_cfg->sd= NULL;
 	ccm_cfg->sd = cci_bus_match(ccm_cfg->ccm, dev->id, sensor_i2c_board->addr);// ccm_cfg->i2c_addr >> 1);
 	if(ccm_cfg->sd)
@@ -4858,28 +4989,55 @@ static int vfe_actuator_subdev_register( struct vfe_dev *dev, struct ccm_config 
 
 #else // NOT defind USE_SPECIFIC_CCI
 
+
+static const s64 mt9v034_link_freqs[] = {
+	        13000000,
+		        26600000,
+			        27000000,
+				        0,
+};
+static struct mt9v032_platform_data my_mt9v034_platform_data = {
+	        .clk_pol        = 0,
+		        .link_freqs     = mt9v034_link_freqs,
+			        .link_def_freq  = 26600000,
+};
+
+static struct i2c_board_info __initdata aptina_sensor_i2c_bdi = {
+	               I2C_BOARD_INFO("mt9v032", 0x48),
+		                      .platform_data = &my_mt9v034_platform_data,
+};
+
 static int vfe_sensor_subdev_register_check(struct vfe_dev *dev,struct v4l2_device *v4l2_dev,
 							struct ccm_config  *ccm_cfg, struct i2c_board_info *sensor_i2c_board)
 {
+
+	sensor_i2c_board = &aptina_sensor_i2c_bdi;
+
+	printk("vfe_sensor_subdev_register_check 0, twi_id = %d\n",ccm_cfg->twi_id);
 	struct i2c_adapter *i2c_adap = i2c_get_adapter(ccm_cfg->twi_id);
 	if (i2c_adap == NULL)
 	{
 		vfe_err("request i2c adapter failed!\n");
 		return -EFAULT;
 	}
+	printk("vfe_sensor_subdev_register_check 1\n");
+	//unsigned short addr = 0x48;
 	ccm_cfg->sd = v4l2_i2c_new_subdev_board(v4l2_dev, i2c_adap, sensor_i2c_board, NULL);
 	if (IS_ERR_OR_NULL(ccm_cfg->sd) )
 	{
 		i2c_put_adapter(i2c_adap);
 		vfe_err("Error registering v4l2 subdevice No such device!\n");
+		vfe_print("registered sensor subdev is err 1+!\n");
 		return -ENODEV;
 	}
 	else
 	{
 		vfe_print("registered sensor subdev is OK!\n");
+		printk("vfe_sensor_subdev_register_check 2 OK\n");
 	}
 	update_ccm_info(dev, ccm_cfg);
 	//Subdev register is OK, check sensor init!
+	printk("vfe_sensor_subdev_register_check 3\n");
 	return vfe_sensor_check(dev);
 }
 static int vfe_sensor_subdev_unregister(struct v4l2_device *v4l2_dev,
@@ -4990,69 +5148,82 @@ static struct v4l2_subdev *vfe_sensor_register_check(struct vfe_dev *dev,struct 
 {
 	int sensor_cnt,ret, sensor_num;
 	struct sensor_item sensor_info;
+	printk("vfe_sensor_register_check sensor detect start!\n");
 	if(dev->vip_define_sensor_list == 1)
 	{
+		printk("vfe_sensor_register_check 0\n");
 		sensor_num = ccm_cfg->sensor_cfg_ini->detect_sensor_num;
 		if(ccm_cfg->sensor_cfg_ini->detect_sensor_num == 0)	{
 			sensor_num = 1;
 		}
 	} else {
+		printk("vfe_sensor_register_check 0.0\n");
 		sensor_num = 1;
 	}
 	for(sensor_cnt=0; sensor_cnt<sensor_num; sensor_cnt++)
 	{
+		printk("vfe_sensor_register_check 1\n");
 		if(dev->vip_define_sensor_list == 1)
 		{
+			printk("vfe_sensor_register_check 2\n");
 			if(ccm_cfg->sensor_cfg_ini->detect_sensor_num > 0)
 				cpy_ccm_sub_device_cfg(ccm_cfg, sensor_cnt);
 		}
 		if(get_sensor_info(ccm_cfg->ccm, &sensor_info) == 0)
 		{
+			printk("vfe_sensor_register_check 3\n");
 			if(ccm_cfg->i2c_addr != sensor_info.i2c_addr)
 			{
-				vfe_warn("Sensor info \"%s\" i2c_addr is different from sys_config!\n", sensor_info.sensor_name );
+				printk("vfe_sensor_register_check 4\n");
+				printk("vfe Sensor info \"%s\" i2c_addr is different from sys_config!\n", sensor_info.sensor_name );
 				//vfe_warn("Sensor info i2c_addr = %d, sys_config i2c_addr = %d!\n", sensor_info.i2c_addr, ccm_cfg->i2c_addr);
 				//ccm_cfg->i2c_addr = sensor_info.i2c_addr;
 			}
 			if(ccm_cfg->is_bayer_raw != sensor_info.sensor_type)
 			{
-				vfe_warn("Camer detect \"%s\" fmt is different from sys_config!\n", sensor_info_type[sensor_info.sensor_type]);
-				vfe_warn("Apply detect  fmt = %d replace sys_config fmt = %d!\n", sensor_info.sensor_type, ccm_cfg->is_bayer_raw);
+				printk("vfe_sensor_register_check 5\n");
+				printk("vfe Camer detect \"%s\" fmt is different from sys_config!\n", sensor_info_type[sensor_info.sensor_type]);
+				printk("vfe Apply detect  fmt = %d replace sys_config fmt = %d!\n", sensor_info.sensor_type, ccm_cfg->is_bayer_raw);
 				ccm_cfg->is_bayer_raw = sensor_info.sensor_type;
 			}
 			if(sensor_info.sensor_type == SENSOR_RAW)
 			{
+				printk("vfe_sensor_register_check 6\n");
 				ccm_cfg->is_isp_used = 1;
 			}
 			else
 			{
+				printk("vfe_sensor_register_check 6.0\n");
 				ccm_cfg->act_used = 0;
 			}
-			vfe_print("Find sensor name is \"%s\", i2c address is %x, type is \"%s\" !\n",sensor_info.sensor_name,sensor_info.i2c_addr,
+			printk("vfe Find sensor name is \"%s\", i2c address is %x, type is \"%s\" !\n",sensor_info.sensor_name,sensor_info.i2c_addr,
 							sensor_info_type[sensor_info.sensor_type]);
 		}
 		sensor_i2c_board->addr = (unsigned short)(ccm_cfg->i2c_addr>>1);
 		strcpy(sensor_i2c_board->type,ccm_cfg->ccm);
 
-		vfe_print("Sub device register \"%s\" i2c_addr = 0x%x start!\n",sensor_i2c_board->type, ccm_cfg->i2c_addr);
+		printk("vfe Sub device register \"%s\" i2c_addr = 0x%x start!\n",sensor_i2c_board->type, ccm_cfg->i2c_addr);
 		ret = vfe_sensor_subdev_register_check(dev,v4l2_dev,ccm_cfg,sensor_i2c_board);
+		printk("vfe_sensor_register_check 7- ret:%d\n",ret);
 		if( ret == -1)
 		{
-			vfe_sensor_subdev_unregister(v4l2_dev,ccm_cfg,sensor_i2c_board);
-			vfe_print("Sub device register \"%s\" failed!\n",sensor_i2c_board->type);
+			//vfe_sensor_subdev_unregister(v4l2_dev,ccm_cfg,sensor_i2c_board);
+			printk("vfe Sub device register \"%s\" failed!\n",sensor_i2c_board->type);
 			ccm_cfg->sd =NULL;
 			continue;
 		}
 		else if(ret == ENODEV ||ret == EFAULT)
 		{
+			printk("vfe_sensor_register_check 7\n");
 			continue;
 		}
 		else if(ret == 0)
 		{
-			vfe_print("Sub device register \"%s\" is OK!\n",sensor_i2c_board->type);
+			printk("vfe Sub device register \"%s\" is OK!\n",sensor_i2c_board->type);
 			break;
 		}
 	}
+	printk("vfe_sensor_register_check sensor detect end!\n");
 	return ccm_cfg->sd;
 }
 
@@ -5064,7 +5235,7 @@ static void probe_work_handle(struct work_struct *work)
 	struct video_device *vfd;
 	char vfe_name[16] = {0};
 	mutex_lock(&probe_hdl_lock);
-	vfe_print("probe_work_handle start!\n");
+	printk("vfe probe_work_handle start!\n");
 	vfe_dbg(0,"v4l2_device_register\n");
 	if(dev->dev_qty == 0)
 		goto probe_hdl_clk_close;
@@ -5075,12 +5246,12 @@ static void probe_work_handle(struct work_struct *work)
 		goto probe_hdl_free_dev;
 	}
 	dev_set_drvdata(&dev->pdev->dev, (dev));
-	vfe_dbg(0,"v4l2 subdev register\n");
+	printk("vfe v4l2 subdev register\n");
 	/* v4l2 subdev register */
 	dev->is_same_module = 0;
 	for(input_num=0; input_num<dev->dev_qty; input_num++)
 	{
-		vfe_print("v4l2 subdev register input_num = %d\n",input_num);
+		printk("vfe v4l2 subdev register input_num = %d\n",input_num);
 		if(!strcmp(dev->ccm_cfg[input_num]->ccm,""))
 		{
 			vfe_err("Sensor name is NULL!\n");
@@ -5114,9 +5285,9 @@ static void probe_work_handle(struct work_struct *work)
 		}
 #endif
 
-		//dev->dev_sensor[input_num].addr = (unsigned short)(dev->ccm_cfg[input_num]->i2c_addr>>1);
-		//strcpy(dev->dev_sensor[input_num].type,dev->ccm_cfg[input_num]->ccm);
-		vfe_print("vfe sensor detect start! input_num = %d\n",input_num);
+		dev->dev_sensor[input_num].addr = 0x90; //(unsigned short)(dev->ccm_cfg[input_num]->i2c_addr>>1);
+		strcpy(dev->dev_sensor[input_num].type,"mt9v032");//dev->ccm_cfg[input_num]->ccm);
+		printk("vfe sensor detect start! input_num = %d\n",input_num);
 		dev->input = input_num;
 		if(vfe_sensor_register_check(dev,&dev->v4l2_dev,dev->ccm_cfg[input_num],&dev->dev_sensor[input_num],input_num) == NULL)
 		{
@@ -5127,8 +5298,11 @@ static void probe_work_handle(struct work_struct *work)
 		else{
 			dev->device_valid_flag[input_num] = 1;
 		}
+		printk("vfe dev->ccm_cfg[%d]->is_isp_used = %p\n",input_num,dev->ccm_cfg[input_num]->is_isp_used);
+		printk("vfe dev->ccm_cfg[%d]->is_bayer_raw = %p\n",input_num,dev->ccm_cfg[input_num]->is_bayer_raw);
 		if(dev->ccm_cfg[input_num]->is_isp_used && dev->ccm_cfg[input_num]->is_bayer_raw)
 		{
+			printk("vfe read ini info\n");
 			if(read_ini_info(dev,input_num, "/system/etc/hawkview/"))
 			{
 				vfe_warn("read ini info fail\n");
@@ -5143,14 +5317,14 @@ static void probe_work_handle(struct work_struct *work)
 				;//goto probe_hdl_free_dev;
 		}
 		snesor_register_end:
-		vfe_dbg(0,"dev->ccm_cfg[%d] = %p\n",input_num,dev->ccm_cfg[input_num]);
-		vfe_dbg(0,"dev->ccm_cfg[%d]->sd = %p\n",input_num,dev->ccm_cfg[input_num]->sd);
+		printk("vfe dev->ccm_cfg[%d] = %p\n",input_num,dev->ccm_cfg[input_num]);
+		printk("vfe dev->ccm_cfg[%d]->sd = %p\n",input_num,dev->ccm_cfg[input_num]->sd);
 		//    vfe_dbg(0,"dev->ccm_cfg[%d]->ccm_info = %p\n",input_num,&dev->ccm_cfg[input_num]->ccm_info);
 		//    vfe_dbg(0,"dev->ccm_cfg[%d]->ccm_info.mclk = %ld\n",input_num,dev->ccm_cfg[input_num]->ccm_info.mclk);
-		vfe_dbg(0,"dev->ccm_cfg[%d]->power.iovdd = %p\n",input_num,dev->ccm_cfg[input_num]->power.iovdd);
-		vfe_dbg(0,"dev->ccm_cfg[%d]->power.avdd = %p\n",input_num,dev->ccm_cfg[input_num]->power.avdd);
-		vfe_dbg(0,"dev->ccm_cfg[%d]->power.dvdd = %p\n",input_num,dev->ccm_cfg[input_num]->power.dvdd);
-		vfe_dbg(0,"dev->ccm_cfg[%d]->power.afvdd = %p\n",input_num,dev->ccm_cfg[input_num]->power.afvdd);
+		printk("vfe dev->ccm_cfg[%d]->power.iovdd = %p\n",input_num,dev->ccm_cfg[input_num]->power.iovdd);
+		printk("vfe dev->ccm_cfg[%d]->power.avdd = %p\n",input_num,dev->ccm_cfg[input_num]->power.avdd);
+		printk("vfe dev->ccm_cfg[%d]->power.dvdd = %p\n",input_num,dev->ccm_cfg[input_num]->power.dvdd);
+		printk("vfe dev->ccm_cfg[%d]->power.afvdd = %p\n",input_num,dev->ccm_cfg[input_num]->power.afvdd);
 		//    dev->ccm_cfg[input_num]->ccm_info.mclk = MCLK_OUT_RATE;
 		//    dev->ccm_cfg[input_num]->ccm_info.stby_mode = dev->ccm_cfg[input_num]->ccm_info.stby_mode;
 	}
@@ -5177,7 +5351,7 @@ static void probe_work_handle(struct work_struct *work)
 	list_add_tail(&dev->devlist, &devlist);
 
 	dev->vfd = vfd;
-	vfe_print("V4L2 device registered as %s\n",video_device_node_name(vfd));
+	printk("vfe V4L2 device registered as %s\n",video_device_node_name(vfd));
 
 	/*initial video buffer queue*/
 	videobuf_queue_dma_contig_init(&dev->vb_vidq, &vfe_video_qops, NULL, &dev->slock,
@@ -5194,7 +5368,7 @@ static void probe_work_handle(struct work_struct *work)
 	dev->early_suspend.suspend = vfe_early_suspend;
 	dev->early_suspend.resume = vfe_late_resume;
 	register_early_suspend(&dev->early_suspend);
-	vfe_print("register_early_suspend @ probe handle!\n");
+	printk("vfe register_early_suspend @ probe handle!\n");
 #endif
 
 probe_hdl_clk_close:
@@ -5202,27 +5376,27 @@ probe_hdl_clk_close:
 	vfe_clk_close(dev);
 #endif
 
-	vfe_print("probe_work_handle end!\n");
+	printk("vfe probe_work_handle end!\n");
 	mutex_unlock(&probe_hdl_lock);
 	return ;
 
 	probe_hdl_rel_vdev:
 	video_device_release(vfd);
-	vfe_print("video_device_release @ probe_hdl!\n");
+	printk("vfe video_device_release @ probe_hdl!\n");
 	probe_hdl_unreg_dev:
-	vfe_print("v4l2_device_unregister @ probe_hdl!\n");
+	printk("vfe v4l2_device_unregister @ probe_hdl!\n");
 	v4l2_device_unregister(&dev->v4l2_dev);
 	probe_hdl_free_dev:
-	vfe_print("vfe_resource_release @ probe_hdl!\n");
+	printk("vfe vfe_resource_release @ probe_hdl!\n");
 #ifdef USE_SPECIFIC_CCI
 	csi_cci_exit_helper(dev->vip_sel);
 	vfe_clk_close(dev);
 #endif
 	//vfe_resource_release(dev);
-	vfe_print("vfe_exit @ probe_hdl!\n");
+	printk("vfe vfe_exit @ probe_hdl!\n");
 	//vfe_exit();
 
-	vfe_warn("Failed to install at probe handle\n");
+	printk("vfe Failed to install at probe handle\n");
 	mutex_unlock(&probe_hdl_lock);
 	return ;
 }
@@ -5239,6 +5413,7 @@ static int vfe_probe(struct platform_device *pdev)
 	int input_num;
 	unsigned int i;
 
+	printk("\r\nvfe_probe 0\r\n");
 	vfe_dbg(0,"vfe_probe\n");
 
 	/*request mem for dev*/
@@ -5281,6 +5456,11 @@ static int vfe_probe(struct platform_device *pdev)
 	vfe_print("dev->mipi_sel = %d\n",pdata->mipi_sel);
 	vfe_print("dev->vip_sel = %d\n",pdata->vip_sel);
 	vfe_print("dev->isp_sel = %d\n",pdata->isp_sel);
+	printk("\r\nvfe_probe 1\r\n");
+	printk("vfe_probe pdev->id = %d\n",pdev->id);
+	printk("vfe_probe dev->mipi_sel = %d\n",pdata->mipi_sel);
+	printk("vfe_probe dev->vip_sel = %d\n",pdata->vip_sel);
+	printk("vfe_probe dev->isp_sel = %d\n",pdata->isp_sel);
 
 	//to cheat the pinctrl
 	dev_set_name(&dev->pdev->dev,"csi%d",dev->id);
@@ -5301,6 +5481,7 @@ static int vfe_probe(struct platform_device *pdev)
 		dev->vip_define_sensor_list = define_sensor_list;
 	}
 
+	printk("\r\nvfe_probe 2\r\n");
 	ret = fetch_config(dev);
 	if (ret) {
 		vfe_err("Error at fetch_config\n");
@@ -5323,8 +5504,10 @@ static int vfe_probe(struct platform_device *pdev)
 #ifdef USE_SPECIFIC_CCI
 	vfe_clk_open(dev);
 #endif
+	//return 0;
 	//to uncheat the pinctrl
 	dev_set_name(&dev->pdev->dev,"sunxi_vfe.%d",dev->id);
+	printk("\r\nvfe_probe 3\r\n");
 
 	ret = bsp_csi_set_base_addr(dev->vip_sel, (unsigned int)dev->regs.csi_regs);
 	if(ret < 0)
@@ -5356,6 +5539,7 @@ static int vfe_probe(struct platform_device *pdev)
 	}
 #endif
 
+	printk("\r\nvfe_probe 4\r\n");
 	bsp_isp_init_platform(dev->platform_id);
 	bsp_isp_set_base_addr((unsigned int)dev->regs.isp_regs);
 	bsp_isp_set_map_load_addr((unsigned int)dev->regs.isp_load_regs);
@@ -5380,6 +5564,7 @@ static int vfe_probe(struct platform_device *pdev)
 		dev->isp_init_para.isp_src_ch_en[i] = 0;
 	dev->isp_init_para.isp_src_ch_en[dev->id] = 1;
 
+	printk("\r\nvfe_probe 5\r\n");
 	//=======================================
 
 	/* init video dma queues */
@@ -5395,6 +5580,7 @@ static int vfe_probe(struct platform_device *pdev)
 
 	schedule_delayed_work(&dev->probe_work,msecs_to_jiffies(1));
 
+	printk("\r\nvfe_probe 6\r\n");
 	/* initial state */
 	dev->capture_mode = V4L2_MODE_PREVIEW;
 
@@ -5507,6 +5693,7 @@ static int vfe_suspend_helper(struct vfe_dev *dev)
 	dev->vfe_standby_poweroff_flag = 1;
 	vfe_request_pin(dev, 0);
 	vfe_gpio_config(dev, 0);
+	vfe_fix_mux();
 	vfe_disable_regulator_all(dev);
 	vfe_print("vfe_suspend done!\n");
 	return ret;
@@ -5523,6 +5710,7 @@ static void resume_work_handle(struct work_struct *work)
 		goto resume_end;
 	vfe_request_pin(dev, 1);
 	vfe_gpio_config(dev, 1);
+	vfe_fix_mux();
 	if(!IS_ERR_OR_NULL(dev->power) && dev->power->stby_mode == NORM_STBY) {
 
 #ifdef USE_SPECIFIC_CCI
@@ -5744,10 +5932,12 @@ static int __init vfe_init(void)
 	int ret,i;
 	unsigned int vfe_used[MAX_VFE_INPUT];
 
+	printk("\r\nvfe_init 0\r\n");
 #ifdef VFE_SYS_CONFIG
 	script_item_u   val;
 	script_item_value_type_e  type;
 
+	printk("\r\nvfe_init 1\r\n");
 	char vfe_para[16] = {0};
 	for(i=0; i<MAX_VFE_INPUT; i++) {
 		sprintf(vfe_para, "csi%d", i);
@@ -5761,6 +5951,7 @@ static int __init vfe_init(void)
 	}
 #else
 #if defined (CONFIG_ARCH_SUN8IW3P1) || defined(CONFIG_ARCH_SUN8IW5P1) || defined(CONFIG_ARCH_SUN8IW6P1) || defined (CONFIG_ARCH_SUN8IW7P1)
+	printk("\r\nvfe_init 2\r\n");
 	vfe_used[0] = 1;
 	vfe_used[1] = 0;
 #else
@@ -5770,6 +5961,7 @@ static int __init vfe_init(void)
 #endif
 
 	vfe_print("Welcome to Video Front End driver\n");
+	printk("\r\nvfe_init 3\r\n");
 	mutex_init(&probe_hdl_lock);
 	for(i=0; i<MAX_VFE_INPUT; i++) {
 		if(vfe_used[i]) {
@@ -5784,6 +5976,7 @@ static int __init vfe_init(void)
 		return ret;
 	}
 	vfe_print("vfe_init end\n");
+	printk("\r\nvfe_init 4\r\n");
 	return 0;
 }
 

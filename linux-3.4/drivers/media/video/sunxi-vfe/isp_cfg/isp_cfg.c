@@ -33,6 +33,8 @@ struct isp_cfg_item isp_cfg_array[] =
 	{	"h22_mipi",		    &h22_mipi_isp_cfg,	  },    
 	{	"gc1004_mipi",		&gc1004_mipi_isp_cfg,	},    
 	{	"ov4689",		      &ov4689_isp_cfg,	    },    
+	//ankt
+	{	"mt9v032",		      &ov4689_isp_cfg,	    },    
 };
 
 int get_isp_cfg(char *isp_cfg_name, struct isp_cfg_item *isp_cfg_info)

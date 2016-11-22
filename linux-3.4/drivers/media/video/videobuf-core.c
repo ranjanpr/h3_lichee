@@ -297,7 +297,10 @@ enum v4l2_field videobuf_next_field(struct videobuf_queue *q)
 {
 	enum v4l2_field field = q->field;
 
-	BUG_ON(V4L2_FIELD_ANY == field);
+	//BUG_ON(V4L2_FIELD_ANY == field);
+	//printk("ankt videobuf_next_field: %d \n", q->field);
+	if(q->field == V4L2_FIELD_ANY)
+		q->field = V4L2_FIELD_NONE;
 
 	if (V4L2_FIELD_ALTERNATE == field) {
 		if (V4L2_FIELD_TOP == q->last) {

@@ -146,50 +146,63 @@ int v4l2_device_register_subdev(struct v4l2_device *v4l2_dev,
 #endif
 	int err;
 
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 	/* Check for valid input */
 	if (v4l2_dev == NULL || sd == NULL || !sd->name[0])
 		return -EINVAL;
 
 	/* Warn if we apparently re-register a subdev */
 	WARN_ON(sd->v4l2_dev != NULL);
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 
 	if (!try_module_get(sd->owner))
 		return -ENODEV;
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 
 	sd->v4l2_dev = v4l2_dev;
 	if (sd->internal_ops && sd->internal_ops->registered) {
 		err = sd->internal_ops->registered(sd);
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 		if (err) {
 			module_put(sd->owner);
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 			return err;
 		}
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 	}
-
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
+	
 	/* This just returns 0 if either of the two args is NULL */
 	err = v4l2_ctrl_add_handler(v4l2_dev->ctrl_handler, sd->ctrl_handler);
 	if (err) {
 		if (sd->internal_ops && sd->internal_ops->unregistered)
 			sd->internal_ops->unregistered(sd);
 		module_put(sd->owner);
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 		return err;
 	}
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 
 #if defined(CONFIG_MEDIA_CONTROLLER)
 	/* Register the entity. */
 	if (v4l2_dev->mdev) {
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 		err = media_device_register_entity(v4l2_dev->mdev, entity);
 		if (err < 0) {
 			if (sd->internal_ops && sd->internal_ops->unregistered)
 				sd->internal_ops->unregistered(sd);
 			module_put(sd->owner);
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 			return err;
 		}
 	}
 #endif
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 
 	spin_lock(&v4l2_dev->lock);
 	list_add_tail(&sd->list, &v4l2_dev->subdevs);
 	spin_unlock(&v4l2_dev->lock);
+	printk("%s:%d\n", __FUNCTION__,__LINE__);
 
 	return 0;
 }

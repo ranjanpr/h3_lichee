@@ -171,6 +171,7 @@ int fetch_sensor_list(struct sensor_config_init *sensor_cfg_ini , char *main, st
 	SensorCommon = &SensorParamCommon[0];
 	//fetch sensor common config;
 	vfe_print("fetch sensor common config! \n");
+	printk("fetch_sensor_list: fetch sensor common config! \n");
 	for (i = 0; i < ARRAY_SIZE(SensorParamCommon);  i++)
 	{
 		if(main == NULL || SensorCommon->sub == NULL)
@@ -389,6 +390,8 @@ int fetch_config(struct vfe_dev *dev)
       type = script_get_item(vfe_para, dev_para, &val);
       if (SCIRPT_ITEM_VALUE_TYPE_INT != type) {
         vfe_err("fetch vip_dev%d_twi_addr from sys_config failed\n", i);
+	dev->ccm_cfg[i]->i2c_addr = 0x90;
+	//ankt
       } else {
         dev->ccm_cfg[i]->i2c_addr = val.val;
       }
@@ -396,7 +399,9 @@ int fetch_config(struct vfe_dev *dev)
       sprintf(dev_para, "vip_dev%d_mname", i);
       type = script_get_item(vfe_para, dev_para, &val);
       if (SCIRPT_ITEM_VALUE_TYPE_STR != type) {
-        char tmp_str[]="ov5650";
+        char tmp_str[]="mt9v032";
+	//ankt
+        //char tmp_str[]="ov5650";
         strcpy(dev->ccm_cfg[i]->ccm,tmp_str);
         vfe_err("fetch vip_dev%d_mname from sys_config failed\n", i);
       } else {
@@ -421,6 +426,9 @@ int fetch_config(struct vfe_dev *dev)
     type = script_get_item(vfe_para, dev_para, &val);
     if (SCIRPT_ITEM_VALUE_TYPE_INT != type) {
       vfe_dbg(0,"fetch vip_dev%d_fmt from sys_config failed\n", i);
+      printk("vfe fetch vip_dev%d_fmt from sys_config failed\n", i);
+      //val.val = 1;
+      //dev->ccm_cfg[i]->is_bayer_raw = val.val;
     } else {
       dev->ccm_cfg[i]->is_bayer_raw = val.val;
     }
@@ -662,8 +670,12 @@ int fetch_config(struct vfe_dev *dev)
 #else
   int type;
 #if defined(CONFIG_ARCH_SUN8IW3P1) || defined(CONFIG_ARCH_SUN9IW1P1)
-	unsigned int i2c_addr_vip0[2] = {0x78,0xff};
-	unsigned char ccm_vip0_dev0[] = {"ov5640",};
+	//unsigned int i2c_addr_vip0[2] = {0x78,0xff};
+	//unsigned char ccm_vip0_dev0[] = {"ov5640",};
+  //ankt
+  unsigned int i2c_addr_vip0[2] = {0x48,0xff};
+  unsigned char ccm_vip0_dev0[] = {"mt9v032",};
+
   unsigned char ccm_vip0_dev1[] = {"",};
 	unsigned int vip0_is_isp_used[2] = {1,1};
   unsigned int vip0_is_bayer_raw[2] = {0,0};

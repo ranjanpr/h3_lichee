@@ -51,6 +51,7 @@
 #include <linux/string.h>
 #include <linux/errno.h>
 #include <linux/i2c.h>
+//#include <media/mt9v032.h>
 #if defined(CONFIG_SPI)
 #include <linux/spi/spi.h>
 #endif
@@ -304,24 +305,39 @@ EXPORT_SYMBOL_GPL(v4l2_i2c_subdev_init);
 
 
 
+extern struct i2c_client *my_client;
+extern int mt9v032_registered(struct v4l2_subdev *subdev1);
 /* Load an i2c sub-device. */
 struct v4l2_subdev *v4l2_i2c_new_subdev_board(struct v4l2_device *v4l2_dev,
 		struct i2c_adapter *adapter, struct i2c_board_info *info,
-		const unsigned short *probe_addrs)
+		const unsigned short *probe_addr)
 {
 	struct v4l2_subdev *sd = NULL;
 	struct i2c_client *client;
 
 	BUG_ON(!v4l2_dev);
 
+	//adapter = i2c_get_adapter(2);
+
+	printk("v4l2_i2c_new_subdev_board 0!\n");
 	request_module(I2C_MODULE_PREFIX "%s", info->type);
 
+	short probe_addrs[2] = { 0x48, I2C_CLIENT_END };
+
 	/* Create the i2c client */
-	if (info->addr == 0 && probe_addrs)
+	//if (1) {
+	if (info->addr == 0 && probe_addrs) {
 		client = i2c_new_probed_device(adapter, info, probe_addrs,
 					       NULL);
-	else
-		client = i2c_new_device(adapter, info);
+		printk("v4l2_i2c_new_subdev_board 1!\n");
+	}
+	else {
+		//client = i2c_new_device(adapter, info);
+		client = my_client;
+		//client = NULL;
+		//mt9v032_registered(NULL);
+		printk("v4l2_i2c_new_subdev_board 2! i%#x \n", info->addr);
+	}
 
 	/* Note: by loading the module first we are certain that c->driver
 	   will be set if the driver was found. If the module was not loaded
@@ -330,26 +346,35 @@ struct v4l2_subdev *v4l2_i2c_new_subdev_board(struct v4l2_device *v4l2_dev,
 	   loaded. This delay-load mechanism doesn't work if other drivers
 	   want to use the i2c device, so explicitly loading the module
 	   is the best alternative. */
-	if (client == NULL || client->driver == NULL)
+	if (client == NULL || client->driver == NULL) {
+		printk("v4l2_i2c_new_subdev_board 3!\n");
 		goto error;
+	}
 
 	/* Lock the module so we can safely get the v4l2_subdev pointer */
 	if (!try_module_get(client->driver->driver.owner))
 		goto error;
 	sd = i2c_get_clientdata(client);
+	printk("v4l2_i2c_new_subdev_board 4!\n");
 
 	/* Register with the v4l2_device which increases the module's
 	   use count as well. */
-	if (v4l2_device_register_subdev(v4l2_dev, sd))
+	if (v4l2_device_register_subdev(v4l2_dev, sd)) {
 		sd = NULL;
+		printk("v4l2_i2c_new_subdev_board 5!\n");
+	}
 	/* Decrease the module use count to match the first try_module_get. */
 	module_put(client->driver->driver.owner);
+	printk("v4l2_i2c_new_subdev_board 6!\n");
 
 error:
 	/* If we have a client but no subdev, then something went wrong and
 	   we must unregister the client. */
-	if (client && sd == NULL)
-		i2c_unregister_device(client);
+	if (client && sd == NULL) {
+		//i2c_unregister_device(client);
+		printk("v4l2_i2c_new_subdev_board 7!\n");
+	}
+	printk("v4l2_i2c_new_subdev_board 8!\n");
 	return sd;
 }
 EXPORT_SYMBOL_GPL(v4l2_i2c_new_subdev_board);

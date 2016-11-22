@@ -517,6 +517,7 @@ static long __video_do_ioctl(struct file *file,
 	long ret_prio = 0;
 	long ret = -ENOTTY;
 
+	//printk("__video_do_ioctl %d cmd: %d\n", VIDIOC_STREAMON, cmd);
 	if (ops == NULL) {
 		printk(KERN_WARNING "videodev: \"%s\" has no ioctl_ops.\n",
 				vfd->name);
