@@ -98,6 +98,7 @@ snd-soc-wm9705-objs := wm9705.o
 snd-soc-wm9712-objs := wm9712.o
 snd-soc-wm9713-objs := wm9713.o
 snd-soc-wm-hubs-objs := wm_hubs.o
+snd-soc-pcm5102a-objs := pcm5102a.o
 
 snd-soc-rt3261-objs := rt3261/rt3261.o rt3261/rt_codec_ioctl.o rt3261/rt3261_ioctl.o rt3261/rt3261-dsp.o
 snd-soc-max9877-objs := max9877.o
@@ -215,3 +216,5 @@ obj-$(CONFIG_SND_SOC_ACX00DAPM_CODEC) += ac100_dapm.o #AC200
 obj-$(CONFIG_SND_SOC_ACX00DAPM_CODEC) += acx00_dapm.o
 #tas5731
 obj-$(CONFIG_SND_SOC_TAS5731_CODEC) += tas5731.o
+
+obj-$(CONFIG_SND_SOC_PCM5102A)	+= snd-soc-pcm5102a.o
